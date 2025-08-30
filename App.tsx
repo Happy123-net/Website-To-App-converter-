@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { generateAndroidAppFiles } from './services/geminiService';
 import type { GeneratedFile, GenerationResult } from './types';
@@ -17,11 +18,34 @@ const DownloadIcon: React.FC<{ className?: string }> = ({ className }) => (
     </svg>
 );
 
+const CodeFileIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+    </svg>
+);
+
+const ChevronDownIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+    </svg>
+);
+
+
 const App: React.FC = () => {
   const [url, setUrl] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<GenerationResult | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
+  const [advancedOptions, setAdvancedOptions] = useState({
+    domStorage: true,
+    fileAccess: false,
+  });
+
+  const handleAdvancedOptionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, checked } = e.target;
+    setAdvancedOptions(prev => ({ ...prev, [name]: checked }));
+  };
 
   const handleGenerate = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -35,16 +59,17 @@ const App: React.FC = () => {
     setResult(null);
 
     try {
-      const generationResult = await generateAndroidAppFiles(url);
+      const generationResult = await generateAndroidAppFiles(url, advancedOptions);
       setResult(generationResult);
+// FIX: Added curly braces to the catch block to fix syntax error.
     } catch (err: any) {
       setError(err.message || 'An unknown error occurred.');
     } finally {
       setIsLoading(false);
     }
-  }, [url]);
+  }, [url, advancedOptions]);
 
-  const handleDownloadAll = useCallback(async () => {
+  const handleDownloadZip = useCallback(async () => {
     if (!result) return;
 
     const zip = new JSZip();
@@ -60,7 +85,7 @@ const App: React.FC = () => {
         const link = document.createElement('a');
         link.href = URL.createObjectURL(zipBlob);
         const safeAppName = result.appName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-        link.download = `${safeAppName || 'android_app'}.zip`;
+        link.download = `${safeAppName || 'android_app'}_source.zip`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -70,6 +95,41 @@ const App: React.FC = () => {
         setError("An error occurred while creating the ZIP file.");
     }
   }, [result]);
+  
+  const handleDownloadHtml = useCallback(() => {
+    if (!result) return;
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${result.appName || 'Web App'}</title>
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+        iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
+    </style>
+</head>
+<body>
+    <iframe src="${url}" title="${result.appName || 'Web App'}">
+        <p>Your browser does not support iframes.</p>
+    </iframe>
+</body>
+</html>
+    `.trim();
+
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    const safeAppName = result.appName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    link.download = `${safeAppName || 'webapp'}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+
+  }, [result, url]);
 
   const generatedFiles: GeneratedFile[] | null = result ? [
       { fileName: 'AndroidManifest.xml', language: 'xml', content: result.manifestContent },
@@ -91,35 +151,76 @@ const App: React.FC = () => {
             <p className="text-slate-400 mt-2 text-lg">Turn any website into a native Android app with AI.</p>
         </header>
 
-        <form onSubmit={handleGenerate} className="bg-slate-800/50 border border-slate-700 p-6 rounded-lg shadow-lg backdrop-blur-sm flex flex-col sm:flex-row items-center gap-4">
-          <input
-            type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://example.com"
-            className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-cyan-500 focus:outline-none transition-all"
-            disabled={isLoading}
-            required
-            aria-label="Website URL"
-          />
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full sm:w-auto flex justify-center items-center px-6 py-3 bg-cyan-600 hover:bg-cyan-500 rounded-md font-semibold text-white transition-all duration-200 shadow-md hover:shadow-lg disabled:bg-slate-600 disabled:cursor-not-allowed"
-          >
-            {isLoading ? (
-                <>
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Generating...
-                </>
-            ) : (
-              'Generate App'
-            )}
-          </button>
-        </form>
+        <div className="bg-slate-800/50 border border-slate-700 p-6 rounded-lg shadow-lg backdrop-blur-sm">
+            <form onSubmit={handleGenerate} className="flex flex-col sm:flex-row items-center gap-4">
+              <input
+                type="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://example.com"
+                className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-cyan-500 focus:outline-none transition-all"
+                disabled={isLoading}
+                required
+                aria-label="Website URL"
+              />
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full sm:w-auto flex justify-center items-center px-6 py-3 bg-cyan-600 hover:bg-cyan-500 rounded-md font-semibold text-white transition-all duration-200 shadow-md hover:shadow-lg disabled:bg-slate-600 disabled:cursor-not-allowed"
+              >
+                {isLoading ? (
+                    <>
+                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Generating...
+                    </>
+                ) : (
+                  'Generate App'
+                )}
+              </button>
+            </form>
+
+            <div className="mt-4">
+                <button onClick={() => setShowAdvanced(!showAdvanced)} className="flex items-center space-x-2 text-sm text-cyan-400 hover:text-cyan-300">
+                    <span>Advanced Options</span>
+                    <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${showAdvanced ? 'rotate-180' : ''}`} />
+                </button>
+                {showAdvanced && (
+                    <div className="mt-4 p-4 bg-slate-700/50 rounded-md border border-slate-600 space-y-3">
+                        <label htmlFor="domStorage" className="flex items-center space-x-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                id="domStorage"
+                                name="domStorage"
+                                checked={advancedOptions.domStorage}
+                                onChange={handleAdvancedOptionChange}
+                                className="h-4 w-4 rounded bg-slate-600 border-slate-500 text-cyan-500 focus:ring-cyan-600"
+                            />
+                            <div className="text-slate-300">
+                                <p>Enable Local Storage</p>
+                                <p className="text-xs text-slate-400">Allows the website to store data on the device (e.g., login sessions).</p>
+                            </div>
+                        </label>
+                         <label htmlFor="fileAccess" className="flex items-center space-x-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                id="fileAccess"
+                                name="fileAccess"
+                                checked={advancedOptions.fileAccess}
+                                onChange={handleAdvancedOptionChange}
+                                className="h-4 w-4 rounded bg-slate-600 border-slate-500 text-cyan-500 focus:ring-cyan-600"
+                            />
+                            <div className="text-slate-300">
+                                <p>Allow File Access</p>
+                                <p className="text-xs text-slate-400">Enables file system access for features like file uploads.</p>
+                            </div>
+                        </label>
+                    </div>
+                )}
+            </div>
+        </div>
 
         <div className="mt-8">
           {isLoading && <LoadingSpinner />}
@@ -135,13 +236,22 @@ const App: React.FC = () => {
                             <p className="text-sm font-mono text-green-400 mt-1">{result.packageName}</p>
                         </div>
                     </div>
-                    <button
-                        onClick={handleDownloadAll}
-                        className="w-full sm:w-auto flex justify-center items-center space-x-2 px-6 py-3 bg-green-600 hover:bg-green-500 rounded-md font-semibold text-white transition-all duration-200 shadow-md hover:shadow-lg"
-                    >
-                        <DownloadIcon className="w-5 h-5" />
-                        <span>Download .ZIP</span>
-                    </button>
+                    <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                        <button
+                            onClick={handleDownloadHtml}
+                            className="w-full sm:w-auto flex justify-center items-center space-x-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-md font-semibold text-white transition-all duration-200 shadow-md hover:shadow-lg"
+                        >
+                            <CodeFileIcon className="w-5 h-5" />
+                            <span>Download .HTML</span>
+                        </button>
+                        <button
+                            onClick={handleDownloadZip}
+                            className="w-full sm:w-auto flex justify-center items-center space-x-2 px-6 py-3 bg-green-600 hover:bg-green-500 rounded-md font-semibold text-white transition-all duration-200 shadow-md hover:shadow-lg"
+                        >
+                            <DownloadIcon className="w-5 h-5" />
+                            <span>Download Source (.ZIP)</span>
+                        </button>
+                    </div>
                 </div>
 
                 <Instructions />

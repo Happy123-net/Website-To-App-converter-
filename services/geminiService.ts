@@ -20,9 +20,25 @@ const generationSchema = {
   required: ['appName', 'packageName', 'iconUrl', 'manifestContent', 'mainActivityContent', 'layoutContent', 'gradleContent']
 };
 
-export const generateAndroidAppFiles = async (url: string): Promise<GenerationResult> => {
+interface GenerationOptions {
+  domStorage: boolean;
+  fileAccess: boolean;
+}
+
+export const generateAndroidAppFiles = async (url: string, options: GenerationOptions): Promise<GenerationResult> => {
   if (!url) {
     throw new Error("URL cannot be empty.");
+  }
+
+  const webSettingsInstructions: string[] = [
+    'webSettings.setJavaScriptEnabled(true);'
+  ];
+
+  if (options.domStorage) {
+    webSettingsInstructions.push('webSettings.setDomStorageEnabled(true);');
+  }
+  if (options.fileAccess) {
+    webSettingsInstructions.push('webSettings.setAllowFileAccess(true);');
   }
   
   const prompt = `
@@ -40,8 +56,9 @@ export const generateAndroidAppFiles = async (url: string): Promise<GenerationRe
         *   Be in the generated package.
         *   Set its content view to R.layout.activity_main.
         *   Find the WebView by its ID.
+        *   Get the WebSettings and apply the following settings specifically:
+            ${webSettingsInstructions.join('\n            ')}
         *   Load the provided URL: ${url}.
-        *   Enable JavaScript in the WebView settings.
         *   Set a WebViewClient to handle page navigation within the WebView itself, preventing links from opening in an external browser.
         *   Implement onBackPressed() to allow the user to navigate back through the WebView's history.
     6.  **activity_main.xml:** The layout file for the main activity. It must contain a single <WebView> element that fills the entire screen ('match_parent' for both width and height).
