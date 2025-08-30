@@ -1,14 +1,20 @@
-
 import React, { useState, useCallback } from 'react';
 import { generateAndroidAppFiles } from './services/geminiService';
 import type { GeneratedFile, GenerationResult } from './types';
 import { CodeDisplay } from './components/CodeDisplay';
 import { Instructions } from './components/Instructions';
+import JSZip from 'jszip';
 
 const LoadingSpinner: React.FC = () => (
     <div className="flex justify-center items-center py-8">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400"></div>
     </div>
+);
+
+const DownloadIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+    </svg>
 );
 
 const App: React.FC = () => {
@@ -37,6 +43,33 @@ const App: React.FC = () => {
       setIsLoading(false);
     }
   }, [url]);
+
+  const handleDownloadAll = useCallback(async () => {
+    if (!result) return;
+
+    const zip = new JSZip();
+    const javaPath = `app/src/main/java/${result.packageName.replace(/\./g, '/')}/MainActivity.java`;
+
+    zip.file('app/build.gradle', result.gradleContent);
+    zip.file('app/src/main/AndroidManifest.xml', result.manifestContent);
+    zip.file('app/src/main/res/layout/activity_main.xml', result.layoutContent);
+    zip.file(javaPath, result.mainActivityContent);
+
+    try {
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(zipBlob);
+        const safeAppName = result.appName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        link.download = `${safeAppName || 'android_app'}.zip`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+    } catch(err) {
+        console.error("Failed to create zip file", err);
+        setError("An error occurred while creating the ZIP file.");
+    }
+  }, [result]);
 
   const generatedFiles: GeneratedFile[] | null = result ? [
       { fileName: 'AndroidManifest.xml', language: 'xml', content: result.manifestContent },
@@ -67,6 +100,7 @@ const App: React.FC = () => {
             className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-md focus:ring-2 focus:ring-cyan-500 focus:outline-none transition-all"
             disabled={isLoading}
             required
+            aria-label="Website URL"
           />
           <button
             type="submit"
@@ -89,16 +123,25 @@ const App: React.FC = () => {
 
         <div className="mt-8">
           {isLoading && <LoadingSpinner />}
-          {error && <div className="bg-red-900/50 border border-red-700 text-red-300 p-4 rounded-lg text-center">{error}</div>}
+          {error && <div role="alert" className="bg-red-900/50 border border-red-700 text-red-300 p-4 rounded-lg text-center">{error}</div>}
           
           {result && generatedFiles && (
             <div className="space-y-8">
-                <div className="bg-slate-800/50 border border-slate-700 p-6 rounded-lg shadow-lg backdrop-blur-sm flex items-center space-x-4">
-                    {result.iconUrl && <img src={result.iconUrl} alt="App Icon" className="w-16 h-16 rounded-xl bg-white p-1"/>}
-                    <div>
-                        <h3 className="text-2xl font-bold text-white">{result.appName}</h3>
-                        <p className="text-sm font-mono text-green-400 mt-1">{result.packageName}</p>
+                <div className="bg-slate-800/50 border border-slate-700 p-6 rounded-lg shadow-lg backdrop-blur-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div className="flex items-center space-x-4">
+                        {result.iconUrl && <img src={result.iconUrl} alt="App Icon" className="w-16 h-16 rounded-xl bg-white p-1"/>}
+                        <div>
+                            <h3 className="text-2xl font-bold text-white">{result.appName}</h3>
+                            <p className="text-sm font-mono text-green-400 mt-1">{result.packageName}</p>
+                        </div>
                     </div>
+                    <button
+                        onClick={handleDownloadAll}
+                        className="w-full sm:w-auto flex justify-center items-center space-x-2 px-6 py-3 bg-green-600 hover:bg-green-500 rounded-md font-semibold text-white transition-all duration-200 shadow-md hover:shadow-lg"
+                    >
+                        <DownloadIcon className="w-5 h-5" />
+                        <span>Download .ZIP</span>
+                    </button>
                 </div>
 
                 <Instructions />
