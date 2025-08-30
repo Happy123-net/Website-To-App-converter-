@@ -1,0 +1,5 @@
+{
+  "name": "Web to Android Converter",
+  "description": "An AI-powered tool that takes any website URL and generates the necessary files to turn it into a native Android application using a WebView.",
+  "requestFramePermissions": []
+}
